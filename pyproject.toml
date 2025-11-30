@@ -1,0 +1,72 @@
+[project]
+name = "prefecture-quiz"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "nao2c4", email = "27849770+nao2c4@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.10.7",
+    "pandas>=2.3.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
+    "mypy>=1.19.0",
+    "pre-commit>=4.5.0",
+    "ruff>=0.14.7",
+]
+
+[tool.ruff]
+exclude = []
+line-length = 100
+output-format = "grouped"  # 出力結果をファイルごとにまとめる
+preview = false
+
+[tool.ruff.lint]
+# すべてのルールをチェックする設定。
+select = ["ALL"]  # ruff で用意されているすべてのルールをチェックする
+                  # (unstable なルール除く)
+ignore = [     # 以下の項目を無視する
+    "COM812",  # 複数行にまたがるカッコ中の各行末にカンマが必要
+               # (format 時にコンフリクトするため無視)
+    "D415",    # docstring の文末に `.` が必要
+               # (日本語では不便なため無視)
+    "ISC001",  # 1行の中でテキストがスペース区切りで結合しない
+               # (format 時にコンフリクトするため無視)
+    # 以下ルールは削除されているが、Ruff パイプラインとの互換性のため残している。
+    # Ruff パイプラインのバージョンが少し古いため。
+    "ANN101",  # [[deprecated]] `self` にアノテーションが必要
+               # (のちのバージョンで削除されるため無視)
+    "ANN102",  # [[deprecated]] `cls` にアノテーションが必要
+               # (のちのバージョンで削除されるため無視)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# ファイルごとに無視するルールを指定
+"tests/**.py" = [
+    "INP001",  # モジュールとみなしたくない
+    "S101",    # assert を許可
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[[tool.mypy.overrides]]
+module = [
+    "soundfile.*",
+    "kokoro.*",
+]
+follow_untyped_imports = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra"
+testpaths = ["tests"]

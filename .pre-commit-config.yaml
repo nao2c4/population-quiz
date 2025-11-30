@@ -1,0 +1,54 @@
+repos:
+# 便利な機能たちが自動実行。
+# 詳細は、下記リンクを参照。
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v6.0.0
+  hooks:
+  # 便利そうなものたち。
+  # 必要に応じて無効・追加する。
+  - id: check-added-large-files  # 大きいファイルのコミット禁止。
+    args: [ --maxkb=500 ]
+  - id: check-json  # json ファイルが壊れていないかチェック。
+  - id: check-toml  # toml ファイルが壊れていないチェック。
+  - id: check-yaml  # yaml ファイルが壊れていないかチェック。
+  - id: end-of-file-fixer  # テキストファイルの最終行に空行を挿入。
+  - id: no-commit-to-branch  # main ブランチへの commit を禁止。
+    args: [ --branch, main, --branch, master, --branch, develop ]
+  - id: trailing-whitespace  # テキストファイル中の行末の無駄な空白を削除。
+    args: [ --markdown-linebreak-ext=md ]
+    exclude: dvc.lock  # dvc.lock ファイルの空白は削除しないように。
+# Ruff による linter & formatter が実行される。
+# チェックに通らない限り、コミットできない。
+# 自動修正できる箇所は自動修正され、コミットが拒否される。
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.14.7
+  hooks:
+  - id: ruff-check
+    args: [ --fix ]
+  - id: ruff-format
+# Jupyter Notebook のファイル (*.ipynb) の出力を削除してコミットする。
+# notebook の出力が消えていない限り、コミットできない。
+# notebook の出力がある場合、notebook の出力が削除され、コミットが拒否される。
+- repo: https://github.com/kynan/nbstripout
+  rev: 0.8.1
+  hooks:
+  - id: nbstripout
+# /src 以下を静的型チェックする。
+# 型チェックに通らない限り、コミットできない。
+- repo: local
+  hooks:
+  - id: mypy
+    name: mypy
+    entry: uv run mypy src
+    language: system
+    types: [ python ]
+    pass_filenames: false
+# pytest によるテストを実施する。
+# pytest のテストに通らない限り、コミットできない。
+# - repo: local
+#   hooks:
+#   - id: pytest
+#     name: pytest
+#     entry: uv run pytest
+#     language: system
+#     pass_filenames: false
