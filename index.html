@@ -20,7 +20,198 @@
 </head>
 
 <body>
-    <p>工事中…</p>
+    <h1>都道府県クイズ</h1>
+
+    <div id="figs-container">Loading image previews...</div>
+    <div id="button-container">
+        <button id="button-0">Prefecture 1</button>
+        <button id="button-1">Prefecture 2</button>
+        <button id="button-2">Prefecture 3</button>
+        <button id="button-3">Prefecture 4</button>
+        <button id="button-4">Prefecture 5</button>
+    </div>
+    <div id="result-container"></div>
+    <button id="next-button" style="display:none;">次の問題へ</button>
+
+    <script>
+        /*
+        やりたいこと:
+
+        1. script.js がデータを取得してくれる。
+        2. ランダムに 0 から 46 の数字を選ぶ。（都道府県は 47 個あるので）
+        3. その数字に対応する都道府県の画像を表示する。
+        4. 都道府県と類似する上位 4 つの都道府県も取得する。
+        5. 5 つの都道府県名をボタンに表示する。
+        6. ユーザーがボタンをクリックしたときに正誤判定を行う。
+        7. 正解なら「正解！」、不正解なら「不正解！ 正解は XXX です。」と表示する。
+        8. 次の問題に進むためのボタンを表示する。
+        9. 2 から 8 を繰り返す。
+        */
+        // Wait for script.js to fetch and expose data via getData().
+        (async function renderImagePreviews() {
+            const figContainer = document.getElementById('figs-container');
+            const buttons = [
+                document.getElementById('button-0'),
+                document.getElementById('button-1'),
+                document.getElementById('button-2'),
+                document.getElementById('button-3'),
+                document.getElementById('button-4')
+            ];
+            const resultContainer = document.getElementById('result-container');
+            const nextButton = document.getElementById('next-button');
+
+            function waitForData(timeoutMs = 5000) {
+                return new Promise((resolve, reject) => {
+                    const started = Date.now();
+                    (function poll() {
+                        const d = typeof getData === 'function' ? getData() : null;
+                        if (d) return resolve(d);
+                        if (Date.now() - started > timeoutMs) return reject(new Error('timeout waiting for data'));
+                        setTimeout(poll, 50);
+                    })();
+                });
+            }
+
+            function pickRandomInt(max) {
+                return Math.floor(Math.random() * max);
+            }
+
+            function shuffle(array) {
+                const a = array.slice();
+                for (let i = a.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [a[i], a[j]] = [a[j], a[i]];
+                }
+                return a;
+            }
+
+            function computeSimilarityMatrixFromDistance(distanceMatrix) {
+                // Convert a distance matrix to a similarity matrix where larger = more
+                // similar. Use a simple transform 1 / (1 + distance).
+                return distanceMatrix.map(row => row.map(v => 1 / (1 + v)));
+            }
+
+            function getTopKSimilarIndices(index, similarityMatrix, k) {
+                return similarityMatrix[index]
+                    .map((value, idx) => ({ idx, value }))
+                    .filter(item => item.idx !== index)
+                    .sort((a, b) => b.value - a.value) // descending similarity
+                    .slice(0, k)
+                    .map(x => x.idx);
+            }
+
+            // Render images for the given prefecture index. If two images are available
+            // (pie + label), show both; otherwise show whichever is present.
+            function showImagesFor(index, data) {
+                figContainer.innerHTML = '';
+                const paths = (Array.isArray(data.image_paths) && data.image_paths[index]) || [];
+                if (paths.length === 0) {
+                    figContainer.textContent = 'No image available for this prefecture.';
+                    return;
+                }
+
+                paths.forEach(src => {
+                    const img = document.createElement('img');
+                    img.src = src;
+                    img.alt = data.prefectures && data.prefectures[index] ? data.prefectures[index] : `prefecture-${index}`;
+                    img.style.maxWidth = '45%';
+                    img.style.margin = '0 8px 8px 0';
+                    figContainer.appendChild(img);
+                });
+            }
+
+            // Wait for the shared data to be ready
+            let data;
+            try {
+                data = await waitForData(3000);
+            } catch (err) {
+                console.error(err);
+                figContainer.textContent = 'データの読み込みに失敗しました。ページをリロードしてください。';
+                return;
+            }
+
+            // choose which distance matrix to use (prefer ratio-based distance)
+            const distanceMatrix = Array.isArray(data.distance_ratio) ? data.distance_ratio
+                : Array.isArray(data.distance_population) ? data.distance_population
+                    : null;
+
+            const similarityMatrix = distanceMatrix ? computeSimilarityMatrixFromDistance(distanceMatrix) : null;
+
+            // Basic state
+            let currentCorrectIndex = null;
+            let answered = false;
+
+            function resetButtons() {
+                buttons.forEach(b => {
+                    b.disabled = false;
+                    b.style.opacity = '1';
+                    b.removeAttribute('data-index');
+                });
+            }
+
+            function disableButtons() {
+                buttons.forEach(b => b.disabled = true);
+            }
+
+            function startRound() {
+                resetButtons();
+                resultContainer.textContent = '';
+                nextButton.style.display = 'none';
+
+                const n = Array.isArray(data.prefectures) ? data.prefectures.length : 47;
+                currentCorrectIndex = pickRandomInt(n);
+                showImagesFor(currentCorrectIndex, data);
+
+                // Get up to 4 most similar indices; if no similarity matrix, pick random others
+                let similarIndices = [];
+                if (similarityMatrix) {
+                    try {
+                        similarIndices = getTopKSimilarIndices(currentCorrectIndex, similarityMatrix, 4);
+                    } catch (e) {
+                        similarIndices = [];
+                    }
+                }
+
+                // If we don't have enough similar indices, fill with random ones
+                const candidateSet = new Set([currentCorrectIndex, ...similarIndices]);
+                while (candidateSet.size < 5) {
+                    candidateSet.add(pickRandomInt(n));
+                }
+
+                const options = shuffle(Array.from(candidateSet));
+
+                // Fill buttons
+                buttons.forEach((button, idx) => {
+                    const prefIdx = options[idx];
+                    button.textContent = data.prefectures[prefIdx] || `Pref ${prefIdx}`;
+                    button.setAttribute('data-index', String(prefIdx));
+                    button.onclick = () => handleChoice(prefIdx);
+                    button.disabled = false;
+                });
+
+                answered = false;
+            }
+
+            function handleChoice(chosenIndex) {
+                if (answered) return;
+                answered = true;
+                disableButtons();
+                if (chosenIndex === currentCorrectIndex) {
+                    resultContainer.textContent = '正解！';
+                } else {
+                    resultContainer.textContent = `不正解！ 正解は ${data.prefectures[currentCorrectIndex]} です。`;
+                }
+
+                // Reveal next button so the user can proceed
+                nextButton.style.display = 'inline-block';
+            }
+
+            nextButton.onclick = () => startRound();
+
+            // Initialize first round
+            startRound();
+        })();
+    </script>
 </body>
 
 </html>
