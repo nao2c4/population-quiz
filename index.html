@@ -162,31 +162,81 @@
                 currentCorrectIndex = pickRandomInt(n);
                 showImagesFor(currentCorrectIndex, data);
 
-                // Get up to 4 most similar indices; if no similarity matrix, pick random others
-                let similarIndices = [];
-                if (similarityMatrix) {
-                    try {
-                        similarIndices = getTopKSimilarIndices(currentCorrectIndex, similarityMatrix, 4);
-                    } catch (e) {
-                        similarIndices = [];
+                // Determine candidate options using the canonical helper from script.js
+                // Prefer using getMostSimilarPrefectures to pick two by population and two by ratio
+                let options = [];
+
+                // safe-access helper
+                function addIfValid(index) {
+                    if (typeof index === 'number' && index >= 0 && index < n && !options.includes(index)) {
+                        options.push(index);
                     }
                 }
 
-                // If we don't have enough similar indices, fill with random ones
-                const candidateSet = new Set([currentCorrectIndex, ...similarIndices]);
-                while (candidateSet.size < 5) {
-                    candidateSet.add(pickRandomInt(n));
+                // Always include the correct answer
+                addIfValid(currentCorrectIndex);
+
+                const popMatrix = Array.isArray(getData().distance_population) ? getData().distance_population : null;
+                const ratioMatrix = Array.isArray(getData().distance_ratio) ? getData().distance_ratio : null;
+
+                if (typeof getMostSimilarPrefectures === 'function') {
+                    // get up to two from population distances
+                    try {
+                        if (popMatrix) {
+                            const popMost = getMostSimilarPrefectures(currentCorrectIndex, popMatrix) || [];
+                            popMost.slice(0, 2).forEach(addIfValid);
+                        }
+                    } catch (e) {
+                        console.warn('getMostSimilarPrefectures(population) failed', e);
+                    }
+
+                    // get up to two from ratio distances
+                    try {
+                        if (ratioMatrix) {
+                            const ratioMost = getMostSimilarPrefectures(currentCorrectIndex, ratioMatrix) || [];
+                            ratioMost.slice(0, 2).forEach(addIfValid);
+                        }
+                    } catch (e) {
+                        console.warn('getMostSimilarPrefectures(ratio) failed', e);
+                    }
+                } else if (similarityMatrix) {
+                    // fallback to the previous approach: top 4 from similarity matrix
+                    try {
+                        const simList = getTopKSimilarIndices(currentCorrectIndex, similarityMatrix, 4);
+                        simList.forEach(addIfValid);
+                    } catch (e) {
+                        console.warn('fallback similarity computation failed', e);
+                    }
                 }
 
-                const options = shuffle(Array.from(candidateSet));
+                // If we still have too few options (e.g. matrices absent), fill with random ones
+                while (options.length < 1) addIfValid(pickRandomInt(n));
 
-                // Fill buttons
+                // We want to present only the unique candidates we found. If duplicates reduced
+                // the number of options below 5, we will not auto-add more choices — we will
+                // disable the unused buttons per requirement.
+
+                // Shuffle the order shown so the correct answer isn't always first
+                options = shuffle(options);
+
+                // Fill buttons. If we have fewer options than button slots, leave extra
+                // buttons disabled and clear their labels.
                 buttons.forEach((button, idx) => {
-                    const prefIdx = options[idx];
-                    button.textContent = data.prefectures[prefIdx] || `Pref ${prefIdx}`;
-                    button.setAttribute('data-index', String(prefIdx));
-                    button.onclick = () => handleChoice(prefIdx);
-                    button.disabled = false;
+                    if (idx < options.length) {
+                        const prefIdx = options[idx];
+                        button.textContent = data.prefectures[prefIdx] || `Pref ${prefIdx}`;
+                        button.setAttribute('data-index', String(prefIdx));
+                        button.onclick = () => handleChoice(prefIdx);
+                        button.disabled = false;
+                        button.style.opacity = '1';
+                    } else {
+                        // fewer choices than button slots: disable and dim
+                        button.textContent = '';
+                        button.removeAttribute('data-index');
+                        button.onclick = null;
+                        button.disabled = true;
+                        button.style.opacity = '0.5';
+                    }
                 });
 
                 answered = false;
