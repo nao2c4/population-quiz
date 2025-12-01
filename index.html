@@ -30,6 +30,7 @@
         <button id="button-3">Prefecture 4</button>
         <button id="button-4">Prefecture 5</button>
     </div>
+    <button id="hint-button">ヒント</button>
     <div id="result-container"></div>
     <button id="next-button" style="display:none;">次の問題へ</button>
 
@@ -58,6 +59,13 @@
                 document.getElementById('button-4')
             ];
             const resultContainer = document.getElementById('result-container');
+            // Hint button - initially show only the 1st image. When clicked, swap
+            // the 1st image for the 2nd and disable the hint button.
+            const hintButton = document.getElementById('hint-button');
+            // currentSecondImageSrc holds the src of the available second image (if any)
+            // firstImageElem is the visible <img> element that will be swapped.
+            let currentSecondImageSrc = null;
+            let firstImageElem = null;
             const nextButton = document.getElementById('next-button');
 
             function waitForData(timeoutMs = 5000) {
@@ -103,21 +111,48 @@
             // Render images for the given prefecture index. If two images are available
             // (pie + label), show both; otherwise show whichever is present.
             function showImagesFor(index, data) {
+                // Reset fig container and current hint state
                 figContainer.innerHTML = '';
+                currentSecondImageSrc = null;
+                firstImageElem = null;
+
                 const paths = (Array.isArray(data.image_paths) && data.image_paths[index]) || [];
                 if (paths.length === 0) {
                     figContainer.textContent = 'No image available for this prefecture.';
+                    hintButton.disabled = true;
                     return;
                 }
 
-                paths.forEach(src => {
-                    const img = document.createElement('img');
-                    img.src = src;
-                    img.alt = data.prefectures && data.prefectures[index] ? data.prefectures[index] : `prefecture-${index}`;
-                    img.style.maxWidth = '45%';
-                    img.style.margin = '0 8px 8px 0';
-                    figContainer.appendChild(img);
-                });
+                // Always show only the first image initially
+                const firstSrc = paths[0];
+                const img = document.createElement('img');
+                img.src = firstSrc;
+                img.alt = data.prefectures && data.prefectures[index] ? data.prefectures[index] : `prefecture-${index}`;
+                img.style.maxWidth = '45%';
+                img.style.margin = '0 8px 8px 0';
+                figContainer.appendChild(img);
+                firstImageElem = img;
+
+                // If a second image exists, prepare hint functionality
+                if (paths.length >= 2) {
+                    currentSecondImageSrc = paths[1];
+                    // Enable hint button
+                    hintButton.disabled = false;
+                    hintButton.style.opacity = '1';
+                    // Replace first image with second when clicked and disable the hint button
+                    hintButton.onclick = () => {
+                        if (!currentSecondImageSrc || !firstImageElem) return;
+                        firstImageElem.src = currentSecondImageSrc;
+                        // Prevent further hints in this round
+                        hintButton.disabled = true;
+                        hintButton.style.opacity = '0.5';
+                    };
+                } else {
+                    // No second image available – disable hint button for this round
+                    hintButton.disabled = true;
+                    hintButton.style.opacity = '0.5';
+                    hintButton.onclick = null;
+                }
             }
 
             // Wait for the shared data to be ready
